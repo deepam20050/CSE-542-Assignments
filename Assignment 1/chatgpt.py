@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 # Load the MNIST dataset from the CSV file
 df = pd.read_csv('mnist_train.csv')
-df = df[:100]
+
 # Group by label and sample 5 images per class
 grouped = df.groupby('label').apply(lambda x: x.sample(5))
 
@@ -23,6 +23,8 @@ plt.show()
 # Compute the covariance matrix for each class
 covariance_matrices = []
 labels = df['label'].unique()
+print(labels)
+print(type(labels))
 for label in labels:
     class_df = df[df['label'] == label].drop('label', axis=1)
     covariance = np.cov(class_df.T)
