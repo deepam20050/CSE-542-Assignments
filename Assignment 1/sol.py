@@ -11,6 +11,8 @@ def load_data ():
   train_df = pd.read_csv('mnist_train.csv')
   test_df = pd.read_csv('mnist_test.csv')
   labels = np.arange(10)
+  train_df = train_df.head(1000)
+  test_df = test_df.head(1000)
 
 def visualize ():
   global train_df
@@ -19,7 +21,6 @@ def visualize ():
     pyplot.subplot(10, 5, i + 1)
     pyplot.imshow(row[: -1].values.reshape(28, 28), cmap = "Greys")
     pyplot.title('Digit = {}'.format(row['label']))
-  pyplot.tight_layout()
   pyplot.show()
 
 def generate_means ():
