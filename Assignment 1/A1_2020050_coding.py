@@ -11,8 +11,6 @@ def load_data ():
   train_df = pd.read_csv('mnist_train.csv')
   test_df = pd.read_csv('mnist_test.csv')
   labels = np.arange(10)
-  train_df = train_df.head(100)
-  test_df = test_df.head(100)
 
 def visualize ():
   global train_df
@@ -32,7 +30,7 @@ def generate_covs ():
   global train_df, labels, label_covs
   for x in labels:
     label_data = train_df[train_df['label'] == x].drop('label', axis=1)
-    label_data -= label_data.mean()
+    label_data -= label_data.mean(axis=0)
     label_covs[x] = (label_data.T.dot(label_data)) / (label_data.shape[0] - 1)
   for x in labels:
     label_covs[x] += np.eye(label_covs[x].shape[0]) * (1e-6)
