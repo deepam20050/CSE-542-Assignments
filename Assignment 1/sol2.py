@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import cupy as cp
 import matplotlib.pyplot as pyplot
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from sklearn.metrics import accuracy_score
@@ -11,8 +12,8 @@ def load_data ():
   train_df = pd.read_csv('mnist_train.csv')
   test_df = pd.read_csv('mnist_test.csv')
   labels = np.arange(10)
-  train_df = train_df.head(100)
-  test_df = test_df.head(100)
+  train_df = train_df.head(1000)
+  test_df = test_df.head(1000)
 
 def visualize ():
   global train_df
@@ -34,8 +35,9 @@ def generate_covs ():
     label_data = train_df[train_df['label'] == x].drop('label', axis=1)
     label_data -= label_data.mean()
     label_covs[x] = (label_data.T.dot(label_data)) / (label_data.shape[0] - 1)
+    # label_covs[x] = cp.array(label_covs[x])
   for x in labels:
-    label_covs[x] += np.eye(label_covs[x].shape[0]) * (1e-6)
+    label_covs[x] += np.eye(label_covs[x].shape[0], dtype=cp.float32) * (1e-6)
 
 def generate_weighted_cov ():
   global train_df ,label_covs
@@ -43,11 +45,7 @@ def generate_weighted_cov ():
   for x in labels:
     weighted_cov += label_covs[x] * train_df[train_df['label'] == x].shape[0]
   weighted_cov /= train_df.shape[0]
-  return weighted_cov
-
-def accuracy_scartch (label):
-  global test_df
-  return sum(test_df['label'] == test_df[label]) / test_df.shape[0]
+  return cp.array(weighted_cov)
 
 def LDA_scratch ():
   global train_df, test_df, labels, label_covs, label_means
@@ -55,15 +53,16 @@ def LDA_scratch ():
   def lda (x):
     gi_x = {}
     for label in label_means.keys():
-      mean = label_means[label].values
-      inv = np.linalg.inv(weighted)
+      mean = cp.array(label_means[label].values)
+      inv = cp.linalg.inv(weighted)
       w1 = inv.dot(mean)
-      w0 = -0.5 * mean.dot(inv).dot(mean) + np.log(train_df[train_df['label'] == label].shape[0] / train_df.shape[0])
-      gi_x[label] = x.dot(w1) + w0
+      w0 = -0.5 * mean.dot(inv).dot(mean) + cp.log(train_df[train_df['label'] == label].shape[0] / train_df.shape[0])
+      gi_x[label] = x.dot(w1.get()) + w0
     return max(gi_x, key=gi_x.get)
   test_df['pred_class_lda'] = test_df.drop('label', axis=1).apply(lambda x: lda(x), axis=1)
-  print('Scratch LDA Accuracy = ', accuracy_scartch('pred_class_lda'))
+  lda_accuracy = sum(test_df['label'] == test_df['pred_class_lda']) / test_df.shape[0]
   test_df.drop('pred_class_lda', axis=1, inplace=True)
+  print('Scratch LDA Accuracy = ', lda_accuracy)
   np.seterr(divide = 'ignore') 
 
 def QDA_scratch ():
@@ -71,13 +70,15 @@ def QDA_scratch ():
   def qda(x):
     gi_x = {}
     for label in label_means.keys():
-      mean = label_means[label].values
-      inv = np.linalg.inv(label_covs[label])
-      gi_x[label] = - 0.5 * np.log(np.linalg.det(label_covs[label])) - 0.5 * np.dot(np.dot((x - mean), inv), (x - mean).T) + np.log(train_df[train_df['label'] == label].shape[0] / train_df.shape[0])
+      mean = cp.array(label_means[label].values)
+      cov = cp.array(label_covs[label])
+      inv = cp.linalg.inv(cov)
+      gi_x[label] = - 0.5 * cp.log(cp.linalg.det(cov)) - 0.5 * cp.dot(cp.dot((x - mean), inv), (x - mean).T) + cp.log(train_df[train_df['label'] == label].shape[0] / train_df.shape[0])
     return max(gi_x, key=gi_x.get)
   test_df['pred_class_qda'] = test_df.drop('label', axis=1).apply(lambda x: qda(x), axis=1)
-  print('Scratch QDA Accuracy = ', accuracy_scartch('pred_class_qda'))
+  qda_accuracy = sum(test_df['label'] == test_df['pred_class_qda']) / test_df.shape[0]
   test_df.drop('pred_class_qda', axis=1, inplace=True)
+  print('Scratch QDA Accuracy = ', qda_accuracy)
 
 def sk_learn_lda ():
   global train_df, test_df
@@ -102,7 +103,7 @@ if __name__ == "__main__":
   visualize()
   generate_means()
   generate_covs()
-  LDA_scratch()
+  # LDA_scratch()
   QDA_scratch()
   sk_learn_lda()
   sk_learn_qda()
