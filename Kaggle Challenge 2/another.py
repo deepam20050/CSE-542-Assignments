@@ -2,67 +2,75 @@
   Deepam Sarmah
   2020050
   deepam20050@iiitd.ac.in
+  Best
 '''
 
-import pandas as pd
 import numpy as np
 import os
-import cv2
 import tensorflow as tf
-from tensorflow.keras import layers, models
+import cv2
+import pandas as pd
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
-# Define the paths
-train_path = 'SML_Train'
-test_path = 'SML_Test'
-train_csv = 'SML_Train.csv'
-test_csv = 'test.csv'
+# Load the CSV file
+train_df = pd.read_csv('SML_Train.csv')
 
-# Read the train CSV file
-train_data = pd.read_csv(train_csv)
+# Define the image size and number of classes
+img_size = (64, 64)
+num_classes = 25
 
-# Split the dataset into train and validation sets
+mean = 0
+var = 50
+sigma = var ** 0.5
+# Create the training data
+X_train = []
+y_train = []
+for idx, row in train_df.iterrows():
+    img_path = os.path.join('SML_Train', str(row['id']))
+    img = cv2.imread(img_path)
+    noise = np.random.normal(mean, sigma, img.shape)
+    noised = img + noise
+    X_train.append(img)
+    X_train.append(noised)
+    y_train.append(row['category'])
+    y_train.append(row['category'])
 
-train_data['category'] = train_data['category'].astype(str)
+# Convert the training data to numpy arrays
+X_train = np.array(X_train)
+y_train = tf.keras.utils.to_categorical(y_train, num_classes)
 
-# Create a data generator for train and validation sets
-train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(
-    # rescale = 1./255,
-	# rotation_range=40,
-    # width_shift_range=0.2,
-    # height_shift_range=0.2,
-    # shear_range=0.2,
-    # zoom_range=0.2,
-    # horizontal_flip=True,
-    featurewise_center=True, featurewise_std_normalization=True)
+# Define VGG16 model
+model = Sequential()
+model.add(Conv2D(64, kernel_size=(3, 3), activation='relu', padding='same', input_shape=(64, 64, 3)))
+model.add(Conv2D(64, kernel_size=(3, 3), activation='relu', padding='same'))
+model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+model.add(Conv2D(128, kernel_size=(3, 3), activation='relu', padding='same'))
+model.add(Conv2D(128, kernel_size=(3, 3), activation='relu', padding='same'))
+model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+model.add(Conv2D(256, kernel_size=(3, 3), activation='relu', padding='same'))
+model.add(Conv2D(256, kernel_size=(3, 3), activation='relu', padding='same'))
+model.add(Conv2D(256, kernel_size=(3, 3), activation='relu', padding='same'))
+model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+model.add(Conv2D(512, kernel_size=(3, 3), activation='relu', padding='same'))
+model.add(Conv2D(512, kernel_size=(3, 3), activation='relu', padding='same'))
+model.add(Conv2D(512, kernel_size=(3, 3), activation='relu', padding='same'))
+model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+model.add(Conv2D(512, kernel_size=(3, 3), activation='relu', padding='same'))
+model.add(Conv2D(512, kernel_size=(3, 3), activation='relu', padding='same'))
+model.add(Conv2D(512, kernel_size=(3, 3), activation='relu', padding='same'))
+model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+model.add(Flatten())
+model.add(Dense(4096, activation='relu'))
+model.add(Dense(4096, activation='relu'))
+model.add(Dense(num_classes, activation='softmax'))
 
-train_generator = train_datagen.flow_from_dataframe(
-    dataframe=train_data,
-    directory=train_path,
-    x_col='id',
-    y_col='category',
-    target_size=(64, 64),
-    batch_size=32,
-    class_mode='categorical')
-
-# Create the CNN model
-model = models.Sequential()
-model.add(layers.Conv2D(32, (2, 2), activation='relu', input_shape=(64, 64, 3)))
-model.add(layers.AveragePooling2D((2, 2)))
-model.add(layers.Conv2D(64, (2, 2), activation='sigmoid'))
-model.add(layers.AveragePooling2D((2, 2)))
-model.add(layers.Conv2D(64, (2, 2), activation='relu'))
-model.add(layers.Flatten())
-model.add(layers.Dense(64, activation='sigmoid'))
-model.add(layers.Dropout(0.2))
-model.add(layers.Dense(25, activation='softmax'))
-
-# Compile the model
-model.compile(optimizer='rmsprop',
-              loss='categorical_crossentropy',
-              metrics=['accuracy'])
+# Compile model with specified optimizer, loss function, and metric
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
 # Train the model
-model.fit(train_generator, epochs=10)
+model.fit(X_train, y_train, epochs=10)
 
 # Create the testing data
 test_files = os.listdir('SML_Test')
@@ -70,7 +78,7 @@ X_test = []
 for file in test_files:
     img_path = os.path.join('SML_Test', file)
     img = cv2.imread(img_path)
-    # img = cv2.resize(img, img_size)
+    img = cv2.resize(img, img_size)
     X_test.append(img)
 
 # Convert the testing data to numpy arrays
@@ -82,3 +90,5 @@ y_pred = model.predict(X_test)
 # Save the predictions to a CSV file
 test_df = pd.DataFrame({'id': test_files, 'category': np.argmax(y_pred, axis=1)})
 test_df.to_csv('SML_Test_Predictions.csv', index=False)
+
+model.save("2020050_model")
